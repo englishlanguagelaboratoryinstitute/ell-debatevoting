@@ -1,0 +1,242 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Ell Grand Debate Stage Projection Suite</title>
+  <!-- Load QRCode library for dynamic rendering -->
+  <script src="https://cloudflare.com"></script>
+  <style>
+    :root {
+      --bg-dark: #0a0a0c;
+      --card-bg: #141419;
+      --accent: #ffd700;
+      --text-main: #ffffff;
+      --text-muted: #a0a0ab;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      background-color: var(--bg-dark);
+      color: var(--text-main);
+      font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+    }
+    .slide-container {
+      width: 100%;
+      height: 100%;
+      position: relative;
+    }
+    .slide {
+      position: absolute;
+      top: 0; left: 0; width: 100%; height: 100%;
+      display: none;
+      flex-direction: column;
+      justify-content: center;
+      align-items: center;
+      padding: 4rem;
+      text-align: center;
+    }
+    .slide.active { display: flex; }
+    h1 { font-size: 3.5rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 2px; }
+    h2 { font-size: 2rem; color: var(--accent); margin-bottom: 2rem; }
+    
+    .qr-box {
+      background: white;
+      padding: 2rem;
+      border-radius: 1rem;
+      box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+      margin-bottom: 2rem;
+    }
+    .instructions { font-size: 1.8rem; color: var(--text-muted); max-width: 800px; }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 4rem;
+      width: 100%;
+      max-width: 1200px;
+      margin-top: 1rem;
+    }
+    .chart-section {
+      background: var(--card-bg);
+      border-radius: 1rem;
+      padding: 2rem;
+      border: 1px solid #27272a;
+    }
+    .chart-section h3 { font-size: 1.8rem; margin-bottom: 1.5rem; border-bottom: 2px solid var(--accent); padding-bottom: 0.5rem; text-align: left; }
+    .bar-container { margin-bottom: 1.5rem; text-align: left; }
+    .bar-label { display: flex; justify-content: space-between; font-size: 1.2rem; margin-bottom: 0.5rem; }
+    .bar-bg { background: #27272a; height: 35px; border-radius: 5px; overflow: hidden; }
+    .bar-fill { background: var(--accent); height: 100%; width: 0%; transition: width 0.8s cubic-bezier(0.1, 1, 0.1, 1); }
+    
+    .controls-hint {
+      position: absolute;
+      bottom: 1rem; right: 1rem;
+      font-size: 0.9rem; color: var(--text-muted);
+      background: rgba(0,0,0,0.4); padding: 0.3rem 0.7rem; border-radius: 4px;
+    }
+    .empty-msg { font-size: 1.2rem; color: var(--text-muted); padding: 2rem 0; text-align: left;}
+  </style>
+</head>
+<body>
+
+  <div class="slide-container" id="deck"></div>
+  <div class="controls-hint">Use Left / Right Arrows or Spacebar to navigate stages</div>
+
+  <script>
+    // --- INTEGRATED PRODUCTION CONFIGURATION ---
+    const CONFIG = {
+      // ⚠️ PASTE YOUR RE-DEPLOYED WEB APP URL HERE BELOW:
+      apiUrl: "https://script.google.com/macros/s/AKfycbzQgwuC09p1QVLl0iKGG2t9I0ludnQoAETUeEALi4LzQCsBm21x5Lf0ClG9aKzMfp6lAw/exec",
+      
+      matches: [
+        { id: 1, name: "Match 1 Session", formUrl: "https://forms.gle/28Whb7ZGJ5h58YsE9" },
+        { id: 2, name: "Match 2 Session", formUrl: "https://forms.gle/BcRdWGN3C3S3Dmhb9" },
+        { id: 3, name: "Match 3 Session", formUrl: "https://forms.gle/7udYEtpcWR54vxTa7" },
+        { id: 4, name: "Match 4 Session", formUrl: "https://forms.gle/gFb3kHWpbXKXE6nt7" },
+        { id: 5, name: "Match 5 Session", formUrl: "https://forms.gle/1Uxj2xPnepVbvAV99" }
+      ],
+      pollInterval: 3000 // Refresh rate tracking Google Sheet logs (3 seconds)
+    };
+
+    let currentSlideIndex = 0;
+    const slideElements = [];
+
+    function initDeck() {
+      const deck = document.getElementById("deck");
+      CONFIG.matches.forEach((match) => {
+        
+        // QR Code Projection Interface
+        const qrSlide = document.createElement("div");
+        qrSlide.className = "slide";
+        qrSlide.dataset.type = "qr";
+        qrSlide.dataset.matchId = match.id;
+        qrSlide.innerHTML = `
+          <h1>${match.name}</h1>
+          <h2>Scan QR Code to Open Form</h2>
+          <div class="qr-box" id="qr-${match.id}"></div>
+          <div class="instructions">Cast your decisions for Team Winner and Best Speaker. Results will stream onto the screen next.</div>
+        `;
+        deck.appendChild(qrSlide);
+        slideElements.push(qrSlide);
+
+        // Live Metric Charts Interface
+        const graphSlide = document.createElement("div");
+        graphSlide.className = "slide";
+        graphSlide.dataset.type = "results";
+        graphSlide.dataset.matchId = match.id;
+        graphSlide.innerHTML = `
+          <h1>${match.name}</h1>
+          <h2>Real-Time Ballot Metrics</h2>
+          <div class="results-grid">
+            <div class="chart-section" id="winner-container-${match.id}">
+              <h3>Team Winner Standings</h3>
+              <div class="empty-msg">No submissions recorded yet...</div>
+            </div>
+            <div class="chart-section" id="speaker-container-${match.id}">
+              <h3>Best Speaker Standings</h3>
+              <div class="empty-msg">No submissions recorded yet...</div>
+            </div>
+          </div>
+        `;
+        deck.appendChild(graphSlide);
+        slideElements.push(graphSlide);
+      });
+
+      updateSlideVisibility();
+      
+      // Generate QR engines dynamically
+      CONFIG.matches.forEach((match) => {
+        new QRCode(document.getElementById(`qr-${match.id}`), {
+          text: match.formUrl,
+          width: 300,
+          height: 300
+        });
+      });
+    }
+
+    function updateSlideVisibility() {
+      slideElements.forEach((slide, idx) => {
+        if (idx === currentSlideIndex) {
+          slide.classList.add("active");
+          if (slide.dataset.type === "results") {
+            fetchLiveMetrics();
+          }
+        } else {
+          slide.classList.remove("active");
+        }
+      });
+    }
+
+    function renderChartBars(containerId, titleText, dataset) {
+      const container = document.getElementById(containerId);
+      const keys = Object.keys(dataset);
+      
+      let html = `<h3>${titleText}</h3>`;
+      
+      if (keys.length === 0) {
+        html += `<div class="empty-msg">No submissions recorded yet...</div>`;
+        container.innerHTML = html;
+        return;
+      }
+
+      const total = keys.reduce((sum, k) => sum + dataset[k], 0);
+
+      keys.forEach((key) => {
+        const votes = dataset[key];
+        const percentage = total > 0 ? Math.round((votes / total) * 100) : 0;
+        html += `
+          <div class="bar-container">
+            <div class="bar-label">
+              <span>${key}</span>
+              <strong>${votes} votes (${percentage}%)</strong>
+            </div>
+            <div class="bar-bg">
+              <div class="bar-fill" style="width: ${percentage}%"></div>
+            </div>
+          </div>
+        `;
+      });
+      container.innerHTML = html;
+    }
+
+    async function fetchLiveMetrics() {
+      const activeSlide = slideElements[currentSlideIndex];
+      if (!activeSlide || activeSlide.dataset.type !== "results") return;
+
+      const matchId = activeSlide.dataset.matchId;
+      try {
+        const response = await fetch(`${CONFIG.apiUrl}?cb=${Date.now()}`);
+        const data = await response.json();
+        const matchData = data[`Match ${matchId}`];
+
+        if (matchData) {
+          renderChartBars(`winner-container-${matchId}`, "Team Winner Standings", matchData.winnerVotes);
+          renderChartBars(`speaker-container-${matchId}`, "Best Speaker Standings", matchData.speakerVotes);
+        }
+      } catch (err) {
+        console.error("API Fetch Error:", err);
+      }
+    }
+
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "ArrowRight" || e.key === " ") {
+        if (currentSlideIndex < slideElements.length - 1) {
+          currentSlideIndex++;
+          updateSlideVisibility();
+        }
+      } else if (e.key === "ArrowLeft") {
+        if (currentSlideIndex > 0) {
+          currentSlideIndex--;
+          updateSlideVisibility();
+        }
+      }
+    });
+
+    initDeck();
+    setInterval(fetchLiveMetrics, CONFIG.pollInterval);
+  </script>
+</body>
+</html>
