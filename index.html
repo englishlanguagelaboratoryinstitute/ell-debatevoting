@@ -1,12 +1,9 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Ell Grand Debate Stage Projection Suite</title>
-  <!-- Load QRCode library for dynamic rendering -->
-  <script src="https://cloudflare.com"></script>
   <style>
     :root {
       --bg-dark: #0a0a0c;
@@ -42,12 +39,21 @@
     h1 { font-size: 3.5rem; margin-bottom: 1rem; text-transform: uppercase; letter-spacing: 2px; }
     h2 { font-size: 2rem; color: var(--accent); margin-bottom: 2rem; }
     
+    /* QR Box uses native image rendering now */
     .qr-box {
       background: white;
-      padding: 2rem;
+      padding: 1.5rem;
       border-radius: 1rem;
       box-shadow: 0 10px 30px rgba(0,0,0,0.5);
       margin-bottom: 2rem;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+    }
+    .qr-box img {
+      width: 300px;
+      height: 300px;
+      display: block;
     }
     .instructions { font-size: 1.8rem; color: var(--text-muted); max-width: 800px; }
 
@@ -88,8 +94,8 @@
   <script>
     // --- INTEGRATED PRODUCTION CONFIGURATION ---
     const CONFIG = {
-      // ⚠️ PASTE YOUR RE-DEPLOYED WEB APP URL HERE BELOW:
-      apiUrl: "https://script.google.com/macros/s/AKfycbzQgwuC09p1QVLl0iKGG2t9I0ludnQoAETUeEALi4LzQCsBm21x5Lf0ClG9aKzMfp6lAw/exec",
+      // ⚠️ PASTE YOUR COPIED APPS SCRIPT WEB APP URL HERE:
+      apiUrl:  "https://script.google.com/macros/s/AKfycbzQgwuC09p1QVLl0iKGG2t9I0ludnQoAETUeEALi4LzQCsBm21x5Lf0ClG9aKzMfp6lAw/exec",
       
       matches: [
         { id: 1, name: "Match 1 Session", formUrl: "https://forms.gle/28Whb7ZGJ5h58YsE9" },
@@ -98,11 +104,16 @@
         { id: 4, name: "Match 4 Session", formUrl: "https://forms.gle/gFb3kHWpbXKXE6nt7" },
         { id: 5, name: "Match 5 Session", formUrl: "https://forms.gle/1Uxj2xPnepVbvAV99" }
       ],
-      pollInterval: 3000 // Refresh rate tracking Google Sheet logs (3 seconds)
+      pollInterval: 3000 
     };
 
     let currentSlideIndex = 0;
     const slideElements = [];
+
+    // Lightweight inline, robust QR encoder logic to bypass broken CDN networks
+    function getQrImageUrl(text) {
+      return `https://qrserver.com{encodeURIComponent(text)}`;
+    }
 
     function initDeck() {
       const deck = document.getElementById("deck");
@@ -116,7 +127,9 @@
         qrSlide.innerHTML = `
           <h1>${match.name}</h1>
           <h2>Scan QR Code to Open Form</h2>
-          <div class="qr-box" id="qr-${match.id}"></div>
+          <div class="qr-box">
+            <img src="${getQrImageUrl(match.formUrl)}" alt="Voting QR Code">
+          </div>
           <div class="instructions">Cast your decisions for Team Winner and Best Speaker. Results will stream onto the screen next.</div>
         `;
         deck.appendChild(qrSlide);
@@ -146,15 +159,6 @@
       });
 
       updateSlideVisibility();
-      
-      // Generate QR engines dynamically
-      CONFIG.matches.forEach((match) => {
-        new QRCode(document.getElementById(`qr-${match.id}`), {
-          text: match.formUrl,
-          width: 300,
-          height: 300
-        });
-      });
     }
 
     function updateSlideVisibility() {
